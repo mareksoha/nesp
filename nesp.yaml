@@ -1,8 +1,8 @@
 # These substitutions allow the end user to override certain values
 substitutions:
-  friendly_name: 'nESP'
-  device_name: 'nesp'
-  node_name: 'nesp'
+  friendly_name: 'nesp_spalna'
+  device_name: 'nesp_spalna'
+  node_name: 'nesp_spalna'
   device_description: 'Rotary Display thermostat on WT-0-S2-240NW1 device with ESP32-S2-SOLO (16MB) with ST7789V2 display'  
   # Xtensa® 32-bit LX 7 single-core processor, operating frequency up to 240MHZ. And integrated a wealth of peripherals, such as SPI, 12S, UART, 12C and so on. This product is developed through a function baseboard. 
   # For details, see ESP_IO38, ESP_IO39, ESP_IO40, ESP_IO41, ESP_IO42, and ESP_ IO2 to expand other peripherals, as shown in Figure 6
@@ -14,10 +14,10 @@ substitutions:
 # replace this with your own
 ##########################################################
 
-  climate_entity: climate.livingroom
-  min_value: "15"
-  max_value: "35"
-  initial_value: "20"
+  climate_entity: climate.nesp_spalna_temp
+  min_value: "50"
+  max_value: "80"
+  initial_value: "70"
 
 ##########################################################
 # /end customizing
@@ -39,25 +39,28 @@ esphome:
     name: ${project_base}.${project_name}
     version: $project_version
   # special board needs special options    
-  platformio_options:
-    platform: https://github.com/platformio/platform-espressif32.git
-    board: esp32-s2-saola-1
-    framework: arduino
-    platform_packages:
-      - framework-arduinoespressif32 @ https://github.com/espressif/arduino-esp32    
+  #platformio_options:
+    #platform: espressif32 
+    #board: esp32-c3-devkitm-1
+    #framework: esp-idf
+    #platform_packages:
+    #  - framework-arduinoespressif32 @ https://github.com/espressif/arduino-esp32    
   on_boot:
     priority: -100.0 #  At this priority, pretty much everything should already be initialized. 
     then: 
       - script.execute: show_page_boot
 
 esp32:
-  board: esp32-s2-saola-1
+  board: esp32-s3-devkitc-1
   framework:
-    type: arduino
-    version: latest
+    type: esp-idf
+    version: recommended
+    sdkconfig_options:
+      COMPILER_OPTIMIZATION_SIZE: y 
 
 # To be able to get logs from the device via serial and api.
 logger:
+  level: DEBUG
 
 # API is a requirement of the dashboard import.
 api:
@@ -67,12 +70,15 @@ ota:
 
 # This should point to the public location of this yaml file.
 dashboard_import:
-  package_import_url: github://velijv/nesp/nesp.yaml@main
+  package_import_url: github://justinmahood/nesp/nesp.yaml@main
 
 wifi:
-  # Set up a wifi access point using the device name above
-  ap:
-    password: "12345678"
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  manual_ip:
+    static_ip: 172.16.3.44
+    gateway: 172.16.3.1
+    subnet: 255.255.255.0
 
 # In combination with the `ap` this allows the user
 # to provision wifi credentials to the device.
@@ -124,7 +130,7 @@ font:
 output:
   - platform: ledc
     id: ${device_name}_backlight_pwm
-    pin: 35
+    pin: 38
     zero_means_zero: true
 
 light:
@@ -183,7 +189,7 @@ select:
 switch: 
   - platform: gpio
     pin: 
-      number: 18
+      number: 7
     name: Motor
     id: ${device_name}_motor
     entity_category: diagnostic
@@ -262,14 +268,14 @@ binary_sensor:
 
   - platform: gpio
     pin: 
-      number: 17 
+      number: 5 
     name: Turn Left # is okay
     internal: true
     id: ${device_name}_gpio17_debounced
 
   - platform: gpio
     pin: 
-      number: 16
+      number: 6
     name: Turn Right
     id: ${device_name}_gpio16_debounced
     internal: true
@@ -298,7 +304,7 @@ binary_sensor:
 
   - platform: gpio
     pin: 
-      number: 2 #GPIO5 #GPIO14 # GPIO12
+      number: 3 #GPIO5 #GPIO14 # GPIO12
 #      mode: INPUT_PULLUP
 #      inverted: true
       mode:
@@ -323,12 +329,12 @@ binary_sensor:
       - delayed_on_off: 300ms 
       # Only send an ON or OFF value if the binary sensor has stayed in the same state for at least the specified time period. 
       ## Useful for debouncing binary switches.
-    on_press:
-      - lambda: |-      
-          ESP_LOGW("button", "pressed at %lu", millis());
-    on_release:
-      - lambda: |-      
-          ESP_LOGE("button", "release at %lu", millis());
+    #on_press:
+      #- lambda: |-      
+      #    ESP_LOGW("button", "pressed at %lu", millis());
+    #on_release:
+      #- lambda: |-      
+      #    ESP_LOGE("button", "release at %lu", millis());
 #    on_press:
 #      then: 
 #        - lambda: |-
@@ -448,30 +454,64 @@ qr_code:
     value: https://my.home-assistant.io/redirect/config_flow_start/?domain=esphome 
 
 spi:
-  clk_pin: 14 # sck : 14
-  mosi_pin: 33 # sda : 33
+  clk_pin: 
+    number: 47 # sck : 14
+    allow_other_uses: true
+  mosi_pin: 
+    number: 41 # sda : 33
+    allow_other_uses: true
 
-display: # 240 x 320
-  - platform: st7789v
+display:
+  - platform: st7701s
     id: ${device_name}_display
-    model: Custom
-    width: 240
-    height: 320
-    offset_height: 0
-    offset_width: 0
-###
-    eightbitcolor: true # OR IT BREAKS
-###    backlight_pin: GPIO35 ## breaks color
-    update_interval: 20s
-    cs_pin: 34
-    dc_pin: 13
-    reset_pin: 21
+    auto_clear_enabled: false
+    #update_interval: never
+    color_order: RGB
+    dimensions:
+      width: 480
+      height: 480
+    #invert_colors: true
+    #transform:
+    #  mirror_x: true
+    #  mirror_y: true
+    cs_pin: 21
+    #reset_pin: EN
+    de_pin: 39
+    hsync_pin: 40
+    vsync_pin: 48
+    pclk_pin: 45
+    #init_sequence:
+    #  - 1 # select canned init sequence number 1
+    #  - [ 0xE0, 0x1F ]  # Set sunlight readable enhancement
+    data_pins:
+      red:
+        - number: 47         
+          allow_other_uses: true #r1
+        - number: 41
+          allow_other_uses: true         #r2
+        - 0         #r3
+        - 42         #r4
+        - 14         #r5
+      green:
+        - 8        #g0
+        - 13         #g1
+        - 18         #g2
+        - 12         #g3
+        - 11         #g4
+        - 17         #g5
+      blue:
+        - 10        #b1
+        - 16        #b2
+        - 9        #b3
+        - 15        #b4
+        - 46        #b5
+
     on_page_change: 
       then: 
         - light.turn_on: ${device_name}_backlight
     pages:
     - id: page_boot
-      lambda: |-
+      lambda: |- 
         id(${device_name}_page).publish_state("boot");
 
         // CANVAS DIMENSIONS // width: 240 // height: 320
