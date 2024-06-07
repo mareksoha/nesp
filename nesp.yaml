@@ -481,8 +481,10 @@ display:
     vsync_pin: 48
     pclk_pin: 45
     #init_sequence:
-    #  - 1 # select canned init sequence number 1
-    #  - [ 0xE0, 0x1F ]  # Set sunlight readable enhancement
+    init_sequence: 
+      - 1
+      - [ 0xE0, 0x1F ]
+      - [ 0xCD, 0x00 ]
     data_pins:
       red:
         - number: 47         
